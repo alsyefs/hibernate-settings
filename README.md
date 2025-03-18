@@ -2,7 +2,9 @@
 
 A comprehensive Linux application that provides a graphical interface for managing system hibernation settings. This application allows you to control when your system hibernates, how it hibernates, and under what conditions hibernation is triggered.
 
-![Hibernate Settings GUI Screenshot](screenshot.png)
+![Hibernate Settings GUI Screenshot](screenshots/1_hibernate_screenshot.png)
+![Hibernate Settings GUI Screenshot](screenshots/2_hibernate_screenshot.png)
+![Hibernate Settings GUI Screenshot](screenshots/3_hibernate_screenshot.png)
 
 ## Compatibility
 
