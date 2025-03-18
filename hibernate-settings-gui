@@ -1,0 +1,550 @@
+#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import re
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                            QLabel, QSlider, QSpinBox, QPushButton,
+                            QCheckBox, QMessageBox, QGroupBox, QTabWidget,
+                            QComboBox, QRadioButton, QButtonGroup, QFileDialog,
+                            QStyleFactory, QToolTip)
+from PyQt5.QtCore import Qt, QProcess, QSize
+from PyQt5.QtGui import QIcon, QFont, QPixmap, QPalette, QColor
+
+class HibernateSettingsGUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Hibernate Settings")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(500)
+
+        # Set window icon if available
+        self.setWindowIcon(QIcon.fromTheme("system-suspend-hibernate"))
+
+        # Set up larger font
+        self.default_font = QFont()
+        self.default_font.setPointSize(12)  # Increase font size
+        QApplication.setFont(self.default_font)
+
+        # Main widget and layout
+        self.main_widget = QTabWidget()
+        self.setCentralWidget(self.main_widget)
+
+        # Create tabs
+        self.create_general_tab()
+        self.create_advanced_tab()
+        self.create_about_tab()
+
+        # Get current settings
+        self.get_current_settings()
+
+    def create_general_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        tab.setLayout(layout)
+
+        # Create UI elements
+        self.create_service_toggle(layout)
+        self.create_timeout_slider(layout)
+        self.create_battery_toggle(layout)
+        self.create_trigger_options(layout)
+
+        # Add buttons at the bottom
+        self.create_buttons(layout)
+
+        self.main_widget.addTab(tab, "General")
+
+    def create_trigger_options(self, layout):
+        group_box = QGroupBox("Hibernation Trigger")
+        box_layout = QVBoxLayout()
+
+        self.trigger_group = QButtonGroup(self)
+
+        self.lock_radio = QRadioButton("Hibernate after screen lock")
+        self.lock_radio.setFont(self.default_font)
+        self.trigger_group.addButton(self.lock_radio, 1)
+
+        self.idle_radio = QRadioButton("Hibernate after system idle")
+        self.idle_radio.setFont(self.default_font)
+        self.trigger_group.addButton(self.idle_radio, 2)
+
+        description = QLabel("Choose what event triggers hibernation after the timeout")
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+
+        box_layout.addWidget(self.lock_radio)
+        box_layout.addWidget(self.idle_radio)
+        box_layout.addWidget(description)
+
+        group_box.setLayout(box_layout)
+        layout.addWidget(group_box)
+
+    def create_advanced_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        tab.setLayout(layout)
+
+        # Screen lock options
+        group_box = QGroupBox("Screen Lock Options")
+        box_layout = QVBoxLayout()
+
+        self.lock_on_suspend_checkbox = QCheckBox("Lock screen before hibernation")
+        self.lock_on_suspend_checkbox.setFont(self.default_font)
+
+        description = QLabel("Ensures your screen is locked when system returns from hibernation")
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+
+        box_layout.addWidget(self.lock_on_suspend_checkbox)
+        box_layout.addWidget(description)
+
+        group_box.setLayout(box_layout)
+        layout.addWidget(group_box)
+
+        # Hibernate mode options
+        group_box = QGroupBox("Hibernate Method")
+        box_layout = QVBoxLayout()
+
+        # Set tooltip for the group box title
+        hibernate_method_tooltip = """
+        <html>
+        <h3>Hibernate Method</h3>
+        <p>Controls how your system performs hibernation:</p>
+        <ul>
+            <li><b>Default</b> - Uses whatever method is set in your system config (usually platform)</li>
+            <li><b>Platform</b> (recommended) - Uses firmware-specific methods for hibernation that are optimized for your hardware</li>
+            <li><b>Shutdown</b> - Powers down completely but saves the system state first (more compatible with some hardware but slower to resume)</li>
+        </ul>
+        </html>
+        """
+        group_box.setToolTip(hibernate_method_tooltip)
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem("Default", "")
+        self.mode_combo.addItem("Platform (recommended)", "platform")
+        self.mode_combo.addItem("Shutdown", "shutdown")
+        self.mode_combo.setFont(self.default_font)
+        self.mode_combo.setToolTip(hibernate_method_tooltip)
+
+        description = QLabel("The method used for hibernation - only change if you're experiencing issues")
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+
+        box_layout.addWidget(self.mode_combo)
+        box_layout.addWidget(description)
+
+        group_box.setLayout(box_layout)
+        layout.addWidget(group_box)
+
+        # Hybrid sleep option
+        group_box = QGroupBox("Hybrid Sleep")
+        box_layout = QVBoxLayout()
+
+        # Set tooltip for hybrid sleep
+        hybrid_sleep_tooltip = """
+        <html>
+        <h3>Hybrid Sleep</h3>
+        <p>Combines hibernation and suspend:</p>
+        <ul>
+            <li>Writes memory to disk (like hibernation) but then enters sleep mode (like suspend)</li>
+            <li><b>Advantage:</b> Faster wake-up than hibernation but still safe if power is lost</li>
+            <li><b>Disadvantage:</b> Uses more power than hibernation</li>
+        </ul>
+        </html>
+        """
+        group_box.setToolTip(hybrid_sleep_tooltip)
+
+        self.hybrid_sleep_checkbox = QCheckBox("Use hybrid sleep instead of hibernate")
+        self.hybrid_sleep_checkbox.setFont(self.default_font)
+        self.hybrid_sleep_checkbox.setToolTip(hybrid_sleep_tooltip)
+
+        description = QLabel("Hybrid sleep combines hibernation with suspend for faster resume, but uses more power")
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+
+        box_layout.addWidget(self.hybrid_sleep_checkbox)
+        box_layout.addWidget(description)
+
+        group_box.setLayout(box_layout)
+        layout.addWidget(group_box)
+
+        # Advanced buttons
+        button_layout = QHBoxLayout()
+
+        self.test_button = QPushButton("Test Hibernation")
+        self.test_button.clicked.connect(self.test_hibernation)
+        self.test_button.setFont(self.default_font)
+
+        self.apply_adv_button = QPushButton("Apply Advanced Settings")
+        self.apply_adv_button.clicked.connect(self.apply_advanced_settings)
+        self.apply_adv_button.setFont(self.default_font)
+
+        button_layout.addStretch()
+        button_layout.addWidget(self.test_button)
+        button_layout.addWidget(self.apply_adv_button)
+
+        layout.addStretch()
+        layout.addLayout(button_layout)
+
+        self.main_widget.addTab(tab, "Advanced")
+
+    def create_about_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        tab.setLayout(layout)
+
+        title = QLabel("Hibernate Settings")
+        title_font = QFont(self.default_font)
+        title_font.setPointSize(18)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setAlignment(Qt.AlignCenter)
+
+        try:
+            # Try to load the hibernate icon
+            icon = QIcon.fromTheme("system-suspend-hibernate")
+            if not icon.isNull():
+                icon_label = QLabel()
+                pixmap = icon.pixmap(QSize(64, 64))
+                icon_label.setPixmap(pixmap)
+                icon_label.setAlignment(Qt.AlignCenter)
+                layout.addWidget(icon_label)
+        except:
+            pass  # If icon loading fails, just skip it
+
+        layout.addWidget(title)
+
+        description = QLabel(
+            "This application provides a simple interface to configure "
+            "hibernation behavior on your system. You can control when "
+            "your system hibernates and adjust related settings."
+        )
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+        description.setAlignment(Qt.AlignCenter)
+        layout.addWidget(description)
+
+        info = QLabel(
+            "<b>Service:</b> hibernate-timer.service<br>"
+            "<b>Configuration:</b> /usr/local/bin/hibernate-timer.sh<br>"
+            "<b>Version:</b> 1.0.0"
+        )
+        info.setTextFormat(Qt.RichText)
+        info.setFont(self.default_font)
+        info.setAlignment(Qt.AlignCenter)
+        layout.addWidget(info)
+
+        # Add some space
+        layout.addStretch()
+
+        author = QLabel("Created by: Saleh Alsyefi")
+        author.setFont(self.default_font)
+        author.setAlignment(Qt.AlignCenter)
+        layout.addWidget(author)
+
+        contact = QLabel("Contact: Saleh.Alsyefi@protonmail.com")
+        contact.setFont(self.default_font)
+        contact.setAlignment(Qt.AlignCenter)
+        layout.addWidget(contact)
+
+
+        self.main_widget.addTab(tab, "About")
+
+    def create_service_toggle(self, layout):
+        group_box = QGroupBox("Hibernation Service")
+        box_layout = QVBoxLayout()
+
+        self.service_checkbox = QCheckBox("Enable hibernation service")
+        self.service_checkbox.setFont(self.default_font)
+
+        description = QLabel("When enabled, your system will hibernate after the specified timeout when screen is locked")
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+
+        box_layout.addWidget(self.service_checkbox)
+        box_layout.addWidget(description)
+
+        group_box.setLayout(box_layout)
+        layout.addWidget(group_box)
+
+    def create_timeout_slider(self, layout):
+        group_box = QGroupBox("Hibernation Timeout")
+        box_layout = QVBoxLayout()
+
+        slider_layout = QHBoxLayout()
+
+        self.timeout_slider = QSlider(Qt.Horizontal)
+        self.timeout_slider.setMinimum(1)
+        self.timeout_slider.setMaximum(180)
+        self.timeout_slider.setTickPosition(QSlider.TicksBelow)
+        self.timeout_slider.setTickInterval(30)
+
+        self.timeout_spinbox = QSpinBox()
+        self.timeout_spinbox.setMinimum(1)
+        self.timeout_spinbox.setMaximum(180)
+        self.timeout_spinbox.setSuffix(" min")
+        self.timeout_spinbox.setFont(self.default_font)
+
+        # Connect slider and spinbox
+        self.timeout_slider.valueChanged.connect(self.timeout_spinbox.setValue)
+        self.timeout_spinbox.valueChanged.connect(self.timeout_slider.setValue)
+
+        slider_layout.addWidget(self.timeout_slider)
+        slider_layout.addWidget(self.timeout_spinbox)
+
+        description = QLabel("Time to wait before hibernating after screen lock")
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+
+        box_layout.addLayout(slider_layout)
+        box_layout.addWidget(description)
+
+        group_box.setLayout(box_layout)
+        layout.addWidget(group_box)
+
+    def create_battery_toggle(self, layout):
+        group_box = QGroupBox("Power Settings")
+        box_layout = QVBoxLayout()
+
+        self.battery_checkbox = QCheckBox("Hibernate only on battery power")
+        self.battery_checkbox.setFont(self.default_font)
+
+        description = QLabel("When checked, your computer will only hibernate when running on battery power")
+        description.setWordWrap(True)
+        description.setFont(self.default_font)
+
+        box_layout.addWidget(self.battery_checkbox)
+        box_layout.addWidget(description)
+
+        group_box.setLayout(box_layout)
+        layout.addWidget(group_box)
+
+    def create_buttons(self, layout):
+        button_layout = QHBoxLayout()
+
+        self.apply_button = QPushButton("Apply")
+        self.apply_button.clicked.connect(self.apply_settings)
+        self.apply_button.setFont(self.default_font)
+
+        self.close_button = QPushButton("Close")
+        self.close_button.clicked.connect(self.close)
+        self.close_button.setFont(self.default_font)
+
+        button_layout.addStretch()
+        button_layout.addWidget(self.apply_button)
+        button_layout.addWidget(self.close_button)
+
+        layout.addStretch()
+        layout.addLayout(button_layout)
+
+    def get_current_settings(self):
+        try:
+            # Check if service is enabled
+            result = subprocess.run(["systemctl", "is-active", "hibernate-timer.service"],
+                                capture_output=True, text=True, check=False)
+            self.service_checkbox.setChecked(result.stdout.strip() == "active")
+
+            # Get timeout value
+            result = subprocess.run(["grep", "HIBERNATE_TIMEOUT=", "/usr/local/bin/hibernate-timer.sh"],
+                                capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                timeout_match = re.search(r'HIBERNATE_TIMEOUT=(\d+)', result.stdout)
+                if timeout_match:
+                    timeout_seconds = int(timeout_match.group(1))
+                    timeout_minutes = timeout_seconds // 60
+                    self.timeout_slider.setValue(timeout_minutes)
+                    self.timeout_spinbox.setValue(timeout_minutes)
+
+            # Get battery-only setting
+            result = subprocess.run(["grep", "HIBERNATE_ONLY_ON_BATTERY=", "/usr/local/bin/hibernate-timer.sh"],
+                                capture_output=True, text=True, check=False)
+            if result.returncode == 0:
+                battery_match = re.search(r'HIBERNATE_ONLY_ON_BATTERY=(true|false)', result.stdout, re.IGNORECASE)
+                if battery_match:
+                    self.battery_checkbox.setChecked(battery_match.group(1).lower() == "true")
+
+            # Get advanced settings
+            try:
+                # Lock on suspend setting
+                result = subprocess.run(["gsettings", "get", "org.gnome.desktop.screensaver", "lock-enabled"],
+                                    capture_output=True, text=True, check=False)
+                if result.returncode == 0 and "true" in result.stdout.lower():
+                    self.lock_on_suspend_checkbox.setChecked(True)
+
+                # Hibernate mode
+                result = subprocess.run(["cat", "/etc/systemd/sleep.conf"],
+                                    capture_output=True, text=True, check=False)
+                if result.returncode == 0:
+                    if "HibernateMode=platform" in result.stdout:
+                        self.mode_combo.setCurrentIndex(1)
+                    elif "HibernateMode=shutdown" in result.stdout:
+                        self.mode_combo.setCurrentIndex(2)
+
+                # Hybrid sleep
+                result = subprocess.run(["systemctl", "status", "systemd-hybrid-sleep.service"],
+                                    capture_output=True, text=True, check=False)
+                if "active" in result.stdout:
+                    self.hybrid_sleep_checkbox.setChecked(True)
+            except:
+                # If advanced settings can't be retrieved, just skip them
+                pass
+
+            # Set default radio button (lock-based is the default)
+            try:
+                # Check the service file to see which method is being used
+                result = subprocess.run(["grep", "ExecStart=", "/etc/systemd/system/hibernate-timer.service"],
+                                    capture_output=True, text=True, check=False)
+                if result.returncode == 0:
+                    if "xautolock" in result.stdout:
+                        self.idle_radio.setChecked(True)
+                    else:
+                        self.lock_radio.setChecked(True)
+                else:
+                    # Default to lock-based if we can't determine
+                    self.lock_radio.setChecked(True)
+            except:
+                # Default to lock-based on error
+                self.lock_radio.setChecked(True)
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to get current settings: {str(e)}")
+
+    def apply_settings(self):
+        # Create a QProcess to run the commands with sudo
+        try:
+            # Prepare commands list
+            commands = []
+
+            # Service status
+            if self.service_checkbox.isChecked():
+                commands.append("systemctl enable hibernate-timer.service")
+                commands.append("systemctl restart hibernate-timer.service")
+            else:
+                commands.append("systemctl stop hibernate-timer.service")
+                commands.append("systemctl disable hibernate-timer.service")
+
+            # Timeout value
+            timeout_minutes = self.timeout_spinbox.value()
+            timeout_seconds = timeout_minutes * 60
+            commands.append(f"sed -i \"s/HIBERNATE_TIMEOUT=.*/HIBERNATE_TIMEOUT={timeout_seconds}  # {timeout_minutes} minutes (in seconds)/\" /usr/local/bin/hibernate-timer.sh")
+
+            # Battery-only setting
+            battery_only = "true" if self.battery_checkbox.isChecked() else "false"
+            commands.append(f"sed -i \"s/HIBERNATE_ONLY_ON_BATTERY=.*/HIBERNATE_ONLY_ON_BATTERY={battery_only}  # Set to \\\"false\\\" if you want to hibernate regardless of power state/\" /usr/local/bin/hibernate-timer.sh")
+
+            # Hibernation trigger
+            if self.lock_radio.isChecked():
+                # Use the lock-based hibernation script
+                commands.append("sed -i 's|ExecStart=.*|ExecStart=/usr/local/bin/hibernate-timer.sh|' /etc/systemd/system/hibernate-timer.service")
+            else:
+                # Use the idle-based hibernation
+                commands.append("sed -i 's|ExecStart=.*|ExecStart=/usr/bin/xautolock -time " + str(self.timeout_spinbox.value()) + " -locker \"systemctl hibernate\"|' /etc/systemd/system/hibernate-timer.service")
+
+            # Make sure to restart the service to apply changes
+            commands.append("systemctl daemon-reload")
+
+            # Run commands with pkexec
+            if commands:
+                # Using pkexec with bash to run all commands
+                command_script = "; ".join(commands)
+                process = QProcess()
+                process.start("pkexec", ["bash", "-c", command_script])
+
+                if process.waitForFinished(10000):  # 10 second timeout
+                    if process.exitCode() == 0:
+                        QMessageBox.information(self, "Success", "Settings applied successfully!")
+                    else:
+                        error = process.readAllStandardError().data().decode()
+                        QMessageBox.critical(self, "Error", f"Failed to apply settings: {error}")
+                else:
+                    QMessageBox.critical(self, "Error", "Command timed out")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to apply settings: {str(e)}")
+
+    def apply_advanced_settings(self):
+        try:
+            # Prepare commands list
+            commands = []
+
+            # Lock on suspend setting
+            lock_enabled = "true" if self.lock_on_suspend_checkbox.isChecked() else "false"
+            commands.append(f"mkdir -p /etc/systemd/system")
+            commands.append(f"echo '[Login]' > /etc/systemd/logind.conf.d/99-hibernate-settings.conf")
+            commands.append(f"echo 'LockScreenBeforeSleep={lock_enabled}' >> /etc/systemd/logind.conf.d/99-hibernate-settings.conf")
+
+            # Hibernate mode
+            hibernate_mode = self.mode_combo.currentData()
+            if hibernate_mode:
+                commands.append(f"mkdir -p /etc/systemd/sleep.conf.d")
+                commands.append(f"echo '[Sleep]' > /etc/systemd/sleep.conf.d/99-hibernate-settings.conf")
+                commands.append(f"echo 'HibernateMode={hibernate_mode}' >> /etc/systemd/sleep.conf.d/99-hibernate-settings.conf")
+
+            # Hybrid sleep
+            if self.hybrid_sleep_checkbox.isChecked():
+                commands.append("sed -i 's|systemctl hibernate|systemctl hybrid-sleep|g' /usr/local/bin/hibernate-timer.sh")
+            else:
+                commands.append("sed -i 's|systemctl hybrid-sleep|systemctl hibernate|g' /usr/local/bin/hibernate-timer.sh")
+
+            # Run commands with pkexec
+            if commands:
+                # Using pkexec with bash to run all commands
+                command_script = "; ".join(commands)
+                process = QProcess()
+                process.start("pkexec", ["bash", "-c", command_script])
+
+                if process.waitForFinished(10000):  # 10 second timeout
+                    if process.exitCode() == 0:
+                        QMessageBox.information(self, "Success", "Advanced settings applied successfully!")
+                    else:
+                        error = process.readAllStandardError().data().decode()
+                        QMessageBox.critical(self, "Error", f"Failed to apply advanced settings: {error}")
+                else:
+                    QMessageBox.critical(self, "Error", "Command timed out")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to apply advanced settings: {str(e)}")
+
+    def test_hibernation(self):
+        reply = QMessageBox.question(self, "Test Hibernation",
+                                    "This will hibernate your system to test the settings.\n\n"
+                                    "Make sure you've saved any important work. Your system will "
+                                    "hibernate immediately after clicking Yes.\n\n"
+                                    "Continue?",
+                                    QMessageBox.Yes | QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            # Save any settings first
+            self.apply_settings()
+
+            # Run hibernate command
+            process = QProcess()
+            process.start("pkexec", ["systemctl", "hibernate"])
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+
+    # Use Fusion style for consistent look
+    app.setStyle('Fusion')
+
+    # Set up dark palette for better visibility
+    dark_palette = app.palette()
+    dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.WindowText, Qt.white)
+    dark_palette.setColor(QPalette.Base, QColor(35, 35, 35))
+    dark_palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ToolTipBase, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.ToolTipText, Qt.white)
+    dark_palette.setColor(QPalette.Text, Qt.white)
+    dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ButtonText, Qt.white)
+    dark_palette.setColor(QPalette.BrightText, Qt.red)
+    dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+    app.setPalette(dark_palette)
+
+    window = HibernateSettingsGUI()
+    window.show()
+    sys.exit(app.exec_())

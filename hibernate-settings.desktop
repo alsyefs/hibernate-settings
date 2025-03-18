@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Hibernate Settings
+GenericName=System Hibernation Configuration
+Comment=Configure when and how your system hibernates
+Exec=/usr/local/bin/hibernate-settings-gui
+Icon=system-suspend-hibernate
+Type=Application
+Categories=System;Settings;HardwareSettings;
+Keywords=hibernate;suspend;power;sleep;
+Terminal=false
+StartupNotify=true
