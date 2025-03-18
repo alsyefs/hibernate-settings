@@ -329,11 +329,11 @@ sudo systemctl restart polkit
 
 ## Downloads
 
-The latest version of Hibernate Settings GUI is available on the [Releases page](https://github.com/salehalsyefi/hibernate-settings/releases).
+The latest version of Hibernate Settings GUI is available on the [Releases page](https://github.com/alsyefs/hibernate-settings/releases).
 
 | Version | Download | Date | Notes |
 |---------|----------|------|-------|
-| v1.0.0  | [hibernate-settings-v1.0.0.tar.gz](https://github.com/salehalsyefi/hibernate-settings/releases/download/v1.0.0/hibernate-settings-v1.0.0.tar.gz) | 2025-03-18 | Initial release |
+| v1.0.0  | [hibernate-settings-v1.0.0.tar.gz](https://github.com/alsyefs/hibernate-settings/releases/download/v1.0.0/hibernate-settings-v1.0.0.tar.gz) | 2025-03-18 | Initial release |
 
 ## License
 
