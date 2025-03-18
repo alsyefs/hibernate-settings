@@ -74,7 +74,7 @@ Install the dependencies on:
 
 ### Automatic Installation
 
-1. Download the latest release from the [Releases page](https://github.com/salehalsyefi/hibernate-settings/releases)
+1. Download the latest release from the [Releases page](https://github.com/alsyefs/hibernate-settings/releases)
 
 2. Extract and install:
    ```bash
