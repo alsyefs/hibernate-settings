@@ -55,7 +55,9 @@ After=graphical.target
 [Service]
 ExecStart=/usr/local/bin/hibernate-timer.sh
 Restart=always
-User=$(logname)
+User=root
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=graphical.target
