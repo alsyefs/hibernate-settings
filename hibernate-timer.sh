@@ -134,21 +134,22 @@ while true; do
 
       # If conditions still met after timeout, hibernate
       if [ "$SHOULD_HIBERNATE" = "true" ]; then
-        log_debug "Screen still locked after timeout ($HIBERNATE_TIMEOUT seconds), hibernating"
-        echo "Screen still locked after timeout, hibernating"
+          log_debug "Screen still locked after timeout ($HIBERNATE_TIMEOUT seconds), hibernating"
+          echo "Screen still locked after timeout, hibernating"
 
-        # We'll use /bin/systemctl with absolute path since this should be running as root
-        log_debug "Executing hibernation command as root..."
-        /bin/systemctl hibernate &>> "$LOG_FILE" 2>&1
+          # Try several methods to hibernate
+          log_debug "Executing hibernation command as root..."
+          /bin/systemctl hibernate &>> "$LOG_FILE" 2>&1
 
-        HIBERNATE_RESULT=$?
-        log_debug "Hibernate command returned: $HIBERNATE_RESULT"
+          HIBERNATE_RESULT=$?
+          log_debug "Hibernate command returned: $HIBERNATE_RESULT"
 
-        if [ $HIBERNATE_RESULT -ne 0 ]; then
-          log_debug "Hibernate command failed, trying with loginctl..."
-          /bin/loginctl hibernate &>> "$LOG_FILE" 2>&1
-          log_debug "Loginctl hibernate returned: $?"
-        fi
+          if [ $HIBERNATE_RESULT -ne 0 ]; then
+              log_debug "Hibernate command failed, trying with dbus-send..."
+              dbus-send --system --print-reply --dest=org.freedesktop.login1 \
+                  /org/freedesktop/login1 org.freedesktop.login1.Manager.Hibernate boolean:true &>> "$LOG_FILE" 2>&1
+              log_debug "dbus-send hibernate returned: $?"
+          fi
       fi
     fi
   fi

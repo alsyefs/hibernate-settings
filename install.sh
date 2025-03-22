@@ -64,6 +64,20 @@ WantedBy=graphical.target
 EOFSERVICE
 fi
 
+# Create polkit rule to allow hibernation without authentication for the service
+echo "Creating polkit rule for hibernation..."
+mkdir -p /etc/polkit-1/rules.d/
+cat > /etc/polkit-1/rules.d/99-hibernate-service.rules << EOFRULE
+polkit.addRule(function(action, subject) {
+    // Allow hibernate-timer service to hibernate without authentication
+    if ((action.id == "org.freedesktop.login1.hibernate" ||
+         action.id == "org.freedesktop.login1.hibernate-multiple-sessions") &&
+        subject.user == "root") {
+            return polkit.Result.YES;
+    }
+});
+EOFRULE
+
 # Install the desktop entry
 echo "Installing desktop entry..."
 cp hibernate-settings.desktop /usr/share/applications/
