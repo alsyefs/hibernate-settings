@@ -4,10 +4,10 @@
 # Start this script as a systemd service
 
 # Configurable variables
-HIBERNATE_TIMEOUT=60  # 1 minutes (in seconds)
+HIBERNATE_TIMEOUT=60  # 1 minute (in seconds)
 CHECK_INTERVAL=10      # Check status every 10 seconds
 HIBERNATE_ONLY_ON_BATTERY=true  # Set to "false" if you want to hibernate regardless of power state
-LOG_FILE="/tmp/hibernate-debug.log"  # Log file for debugging
+LOG_FILE="/var/log/hibernate-timer.log"  # Log file for debugging
 
 # Enable debug logging
 DEBUG=true
@@ -15,7 +15,7 @@ DEBUG=true
 # Log function
 log_debug() {
   if [ "$DEBUG" = "true" ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE" 2>/dev/null || logger "Hibernate timer: $1"
   fi
 }
 
@@ -134,22 +134,23 @@ while true; do
 
       # If conditions still met after timeout, hibernate
       if [ "$SHOULD_HIBERNATE" = "true" ]; then
-          log_debug "Screen still locked after timeout ($HIBERNATE_TIMEOUT seconds), hibernating"
-          echo "Screen still locked after timeout, hibernating"
+        log_debug "Screen still locked after timeout ($HIBERNATE_TIMEOUT seconds), hibernating"
+        echo "Screen still locked after timeout, hibernating"
 
-          # Try several methods to hibernate
-          log_debug "Executing hibernation command as root..."
-          /bin/systemctl hibernate &>> "$LOG_FILE" 2>&1
+        # Log to system journal for better visibility
+        logger "Hibernate timer: Attempting hibernation now"
 
-          HIBERNATE_RESULT=$?
-          log_debug "Hibernate command returned: $HIBERNATE_RESULT"
+        # Try direct kernel interface first (most reliable method as root)
+        log_debug "Trying direct kernel hibernation method"
+        logger "Hibernate timer: Trying direct kernel hibernation"
+        echo disk > /sys/power/state
 
-          if [ $HIBERNATE_RESULT -ne 0 ]; then
-              log_debug "Hibernate command failed, trying with dbus-send..."
-              dbus-send --system --print-reply --dest=org.freedesktop.login1 \
-                  /org/freedesktop/login1 org.freedesktop.login1.Manager.Hibernate boolean:true &>> "$LOG_FILE" 2>&1
-              log_debug "dbus-send hibernate returned: $?"
-          fi
+        # If we're still running, try alternative methods
+        sleep 2
+
+        log_debug "Direct kernel method failed, trying systemctl"
+        logger "Hibernate timer: Direct method failed, trying systemctl"
+        /bin/systemctl hibernate
       fi
     fi
   fi
